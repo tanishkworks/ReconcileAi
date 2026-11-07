@@ -1,14 +1,24 @@
 import sqlite3
 import json
+import uuid
+import requests
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Dict, Any, Optional
-from app.config import DB_PATH
+from app.config import DB_PATH, SUPABASE_URL, SUPABASE_ANON_KEY
 
 def get_db_connection() -> sqlite3.Connection:
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     return conn
+
+def get_supabase_headers() -> Dict[str, str]:
+    return {
+        "apikey": SUPABASE_ANON_KEY,
+        "Authorization": f"Bearer {SUPABASE_ANON_KEY}",
+        "Content-Type": "application/json",
+        "Prefer": "resolution=merge-duplicates,return=representation"
+    }
 
 def init_db():
     conn = get_db_connection()
@@ -58,7 +68,7 @@ def init_db():
     );
     """)
 
-    # Local Telemetry Trace Mirror (for on-screen observability)
+    # Local Telemetry Trace Mirror
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS telemetry_traces (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -78,9 +88,198 @@ def init_db():
     );
     """)
 
+    # Local Users table (mirror of Supabase profiles)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS users (
+        id TEXT PRIMARY KEY,
+        email TEXT UNIQUE NOT NULL,
+        full_name TEXT NOT NULL,
+        avatar_url TEXT,
+        organization_name TEXT,
+        role TEXT,
+        password_hash TEXT,
+        auth_provider TEXT DEFAULT 'google',
+        created_at TEXT NOT NULL
+    );
+    """)
+
     conn.commit()
     conn.close()
 
+# -------------------------------------------------------------------------
+# Supabase Synchronization Functions
+# -------------------------------------------------------------------------
+def sync_invoice_to_supabase(invoice_data: Dict[str, Any]):
+    if not SUPABASE_URL or not SUPABASE_ANON_KEY:
+        return
+    try:
+        url = f"{SUPABASE_URL}/rest/v1/invoices"
+        payload = [{
+            "invoice_id": invoice_data["invoice_id"],
+            "vendor_name": invoice_data["vendor_name"],
+            "invoice_date": invoice_data["invoice_date"],
+            "line_items": invoice_data["line_items"],
+            "line_items_sum": float(invoice_data["line_items_sum"]),
+            "tax_amount": float(invoice_data["tax_amount"]),
+            "stated_total": float(invoice_data["stated_total"]),
+            "math_valid": bool(invoice_data["math_valid"]),
+            "math_discrepancy": float(invoice_data["math_discrepancy"]),
+            "retry_count": int(invoice_data.get("retry_count", 0)),
+            "bank_deposit_amount": float(invoice_data["bank_deposit_amount"]) if invoice_data.get("bank_deposit_amount") is not None else None,
+            "shortfall_variance": float(invoice_data["shortfall_variance"]) if invoice_data.get("shortfall_variance") is not None else None,
+            "morse_trace_id": invoice_data["morse_trace_id"],
+            "morse_outcome": invoice_data["morse_outcome"],
+            "morse_success": bool(invoice_data["morse_success"]),
+            "token_spend": int(invoice_data["token_spend"]),
+            "retry_token_waste": int(invoice_data.get("retry_token_waste", 0)),
+            "estimated_cost_usd": float(invoice_data["estimated_cost_usd"]),
+            "human_verdict": invoice_data.get("human_verdict", "pending"),
+            "raw_ocr_payload": invoice_data.get("raw_ocr_payload", "")
+        }]
+        requests.post(url, headers=get_supabase_headers(), json=payload, timeout=4)
+    except Exception as e:
+        print(f"[Supabase Sync] Warning syncing invoice: {e}")
+
+def sync_telemetry_to_supabase(trace_data: Dict[str, Any]):
+    if not SUPABASE_URL or not SUPABASE_ANON_KEY:
+        return
+    try:
+        url = f"{SUPABASE_URL}/rest/v1/telemetry_traces"
+        payload = [{
+            "trace_id": trace_data["trace_id"],
+            "invoice_id": trace_data["invoice_id"],
+            "agent_name": trace_data["agent_name"],
+            "outcome": trace_data["outcome"],
+            "success": bool(trace_data["success"]),
+            "prompt_tokens": int(trace_data["prompt_tokens"]),
+            "completion_tokens": int(trace_data["completion_tokens"]),
+            "total_tokens": int(trace_data["total_tokens"]),
+            "retry_tokens": int(trace_data.get("retry_tokens", 0)),
+            "cost_usd": float(trace_data["cost_usd"]),
+            "latency_ms": float(trace_data["latency_ms"]),
+            "spans": trace_data["spans"]
+        }]
+        requests.post(url, headers=get_supabase_headers(), json=payload, timeout=4)
+    except Exception as e:
+        print(f"[Supabase Sync] Warning syncing trace: {e}")
+
+# -------------------------------------------------------------------------
+# User Profiles & Auth Persistence
+# -------------------------------------------------------------------------
+def save_or_update_user_profile(
+    email: str,
+    full_name: str,
+    avatar_url: Optional[str] = None,
+    organization_name: str = "Enterprise Treasury",
+    role: str = "Financial Controller",
+    auth_provider: str = "google",
+    user_id: Optional[str] = None
+) -> Dict[str, Any]:
+    now_iso = datetime.now(timezone.utc).isoformat()
+    uid = user_id or str(uuid.uuid5(uuid.NAMESPACE_URL, f"mailto:{email.lower()}"))
+    avatar = avatar_url or f"https://api.dicebear.com/7.x/initials/svg?seed={full_name}"
+
+    # 1. Save to SQLite
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+    INSERT INTO users (id, email, full_name, avatar_url, organization_name, role, auth_provider, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(email) DO UPDATE SET
+        full_name=excluded.full_name,
+        avatar_url=excluded.avatar_url,
+        organization_name=excluded.organization_name,
+        role=excluded.role,
+        auth_provider=excluded.auth_provider
+    """, (uid, email.lower(), full_name, avatar, organization_name, role, auth_provider, now_iso))
+    conn.commit()
+    conn.close()
+
+    user_data = {
+        "id": uid,
+        "email": email.lower(),
+        "name": full_name,
+        "full_name": full_name,
+        "avatar_url": avatar,
+        "company": organization_name,
+        "organization_name": organization_name,
+        "role": role,
+        "auth_provider": auth_provider,
+        "created_at": now_iso
+    }
+
+    # 2. Sync to Supabase public.profiles
+    if SUPABASE_URL and SUPABASE_ANON_KEY:
+        try:
+            url = f"{SUPABASE_URL}/rest/v1/profiles"
+            payload = [{
+                "id": uid,
+                "email": email.lower(),
+                "full_name": full_name,
+                "avatar_url": avatar,
+                "organization_name": organization_name,
+                "role": role,
+                "updated_at": now_iso
+            }]
+            requests.post(url, headers=get_supabase_headers(), json=payload, timeout=4)
+        except Exception as e:
+            print(f"[Supabase Profiles] Warning syncing profile: {e}")
+
+    return user_data
+
+def get_user_by_email_or_id(identifier: str) -> Optional[Dict[str, Any]]:
+    # First check SQLite
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM users WHERE email = ? OR id = ?", (identifier.lower(), identifier))
+    row = cursor.fetchone()
+    conn.close()
+    if row:
+        return dict(row)
+
+    # Check Supabase
+    if SUPABASE_URL and SUPABASE_ANON_KEY:
+        try:
+            url = f"{SUPABASE_URL}/rest/v1/profiles?or=(email.eq.{identifier.lower()},id.eq.{identifier})&select=*"
+            r = requests.get(url, headers=get_supabase_headers(), timeout=4)
+            if r.status_code == 200 and len(r.json()) > 0:
+                p = r.json()[0]
+                return {
+                    "id": p["id"],
+                    "email": p["email"],
+                    "name": p["full_name"],
+                    "full_name": p["full_name"],
+                    "avatar_url": p["avatar_url"],
+                    "company": p.get("organization_name", "Enterprise Treasury"),
+                    "role": p.get("role", "Financial Controller")
+                }
+        except Exception as e:
+            print(f"[Supabase] Error reading user: {e}")
+
+    return None
+
+def list_all_users() -> List[Dict[str, Any]]:
+    # Check Supabase first
+    if SUPABASE_URL and SUPABASE_ANON_KEY:
+        try:
+            url = f"{SUPABASE_URL}/rest/v1/profiles?select=*&order=created_at.desc"
+            r = requests.get(url, headers=get_supabase_headers(), timeout=4)
+            if r.status_code == 200 and len(r.json()) > 0:
+                return r.json()
+        except Exception:
+            pass
+
+    # Fallback to SQLite
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM users ORDER BY created_at DESC")
+    rows = cursor.fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+# -------------------------------------------------------------------------
+# Core Persistence
+# -------------------------------------------------------------------------
 def save_invoice_and_telemetry(invoice_data: Dict[str, Any], trace_data: Dict[str, Any]):
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -177,3 +376,7 @@ def save_invoice_and_telemetry(invoice_data: Dict[str, Any], trace_data: Dict[st
 
     conn.commit()
     conn.close()
+
+    # Sync to Supabase in background
+    sync_invoice_to_supabase(invoice_data)
+    sync_telemetry_to_supabase(trace_data)

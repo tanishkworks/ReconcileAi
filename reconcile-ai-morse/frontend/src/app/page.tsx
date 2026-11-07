@@ -12,6 +12,7 @@ import { AnalyticsView } from "@/components/AnalyticsView";
 import { SettingsView } from "@/components/SettingsView";
 import { AuthModal } from "@/components/AuthModal";
 import { LandingHero } from "@/components/LandingHero";
+import { Lock, ArrowRight, ShieldCheck } from "lucide-react";
 import {
   fetchStats,
   fetchInvoices,
@@ -40,6 +41,9 @@ export default function ReconcileApp() {
   useEffect(() => {
     const u = getCurrentUser();
     setUser(u);
+    if (!u) {
+      setActiveTab("home");
+    }
   }, []);
 
   // Load initial data
@@ -61,8 +65,10 @@ export default function ReconcileApp() {
   }, [filterStatus, searchQuery, selectedInvoice]);
 
   useEffect(() => {
-    loadData();
-  }, [filterStatus, searchQuery]);
+    if (user) {
+      loadData();
+    }
+  }, [filterStatus, searchQuery, user, loadData]);
 
   // Load selected invoice trace detail
   useEffect(() => {
@@ -82,6 +88,10 @@ export default function ReconcileApp() {
 
   // Batch Simulation Trigger
   const handleRunBatch = async () => {
+    if (!user) {
+      setIsAuthOpen(true);
+      return;
+    }
     setIsRunningBatch(true);
     try {
       await runTelemetryBatch();
@@ -99,6 +109,10 @@ export default function ReconcileApp() {
 
   // Reset Trigger
   const handleReset = async () => {
+    if (!user) {
+      setIsAuthOpen(true);
+      return;
+    }
     if (confirm("Reset SQLite ledger database and re-seed bank transactions?")) {
       await resetLedger();
       setSelectedInvoice(null);
@@ -129,9 +143,45 @@ export default function ReconcileApp() {
     setActiveTab("ledger");
   };
 
+  // Strictly Gated Navigation Handlers
+  const handleTabChange = (tab: string) => {
+    if (tab === "home") {
+      setActiveTab("home");
+      return;
+    }
+    if (!user) {
+      setIsAuthOpen(true);
+      return;
+    }
+    setActiveTab(tab);
+  };
+
+  const handleLaunchWorkbench = () => {
+    if (!user) {
+      setIsAuthOpen(true);
+      return;
+    }
+    setActiveTab("ledger");
+  };
+
+  const handleOpenUpload = () => {
+    if (!user) {
+      setIsAuthOpen(true);
+      return;
+    }
+    setIsIngestOpen(true);
+  };
+
+  const handleAuthSuccess = (loggedUser: any) => {
+    setUser(loggedUser);
+    setIsAuthOpen(false);
+    setActiveTab("ledger");
+  };
+
   const handleSignOut = () => {
     signOutUser();
     setUser(null);
+    setActiveTab("home");
   };
 
   return (
@@ -140,8 +190,8 @@ export default function ReconcileApp() {
       {activeTab !== "home" && (
         <Navbar
           activeTab={activeTab}
-          onTabChange={setActiveTab}
-          onOpenUpload={() => setIsIngestOpen(true)}
+          onTabChange={handleTabChange}
+          onOpenUpload={handleOpenUpload}
           onOpenAuth={() => setIsAuthOpen(true)}
           user={user}
           onSignOut={handleSignOut}
@@ -153,12 +203,46 @@ export default function ReconcileApp() {
       {/* View Router */}
       {activeTab === "home" && (
         <LandingHero
-          onLaunchApp={() => setActiveTab("ledger")}
+          onLaunchApp={handleLaunchWorkbench}
           onOpenAuth={() => setIsAuthOpen(true)}
+          user={user}
         />
       )}
 
-      {activeTab === "ledger" && (
+      {/* Gated Access Block: If unauthenticated user navigates into workspace */}
+      {activeTab !== "home" && !user && (
+        <div className="flex-1 flex flex-col items-center justify-center p-8 text-center space-y-4 min-h-[60vh]">
+          <div className="w-14 h-14 rounded-full bg-[#FAF9F5] border border-[#D4D1C5] flex items-center justify-center text-[#141413] shadow-xs">
+            <Lock className="w-6 h-6 text-[#141413]" />
+          </div>
+          <div className="space-y-1 max-w-md mx-auto">
+            <h2 className="font-editorial text-2xl font-bold text-[#141413]">
+              Authentication Required
+            </h2>
+            <p className="text-xs text-[#615F59] leading-relaxed">
+              The Enterprise Financial Ledger, Ingestion Pipeline, and Morse Telemetry Engine are restricted to verified accounts. Please sign in or create an account to unlock all features.
+            </p>
+          </div>
+          <div className="flex flex-col sm:flex-row items-center gap-3 pt-2">
+            <button
+              onClick={() => setIsAuthOpen(true)}
+              className="btn-ledger-primary py-2.5 px-5 text-xs font-semibold cursor-pointer shadow flex items-center gap-2"
+            >
+              <span>Sign In with Google / Account</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </button>
+            <button
+              onClick={() => setActiveTab("home")}
+              className="btn-ledger py-2.5 px-4 text-xs font-medium cursor-pointer"
+            >
+              Back to Overview & Demo
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Authenticated Workspace Views */}
+      {activeTab === "ledger" && user && (
         <div className="flex flex-col flex-1">
           {/* Top Ledger Header & Unit Economics Strip */}
           <HeaderMetrics
@@ -166,7 +250,7 @@ export default function ReconcileApp() {
             isRunningBatch={isRunningBatch}
             onRunBatch={handleRunBatch}
             onReset={handleReset}
-            onOpenIngest={() => setIsIngestOpen(true)}
+            onOpenIngest={handleOpenUpload}
           />
 
           {/* Main Split Workbench */}
@@ -197,7 +281,7 @@ export default function ReconcileApp() {
         </div>
       )}
 
-      {activeTab === "uploader" && (
+      {activeTab === "uploader" && user && (
         <div className="flex-1 py-4">
           <DocumentUploader
             onDocumentProcessed={handleInvoiceCreated}
@@ -206,19 +290,19 @@ export default function ReconcileApp() {
         </div>
       )}
 
-      {activeTab === "bank_feeds" && (
+      {activeTab === "bank_feeds" && user && (
         <div className="flex-1 py-4">
           <BankFeeds />
         </div>
       )}
 
-      {activeTab === "analytics" && (
+      {activeTab === "analytics" && user && (
         <div className="flex-1 py-4">
           <AnalyticsView stats={stats} />
         </div>
       )}
 
-      {activeTab === "settings" && (
+      {activeTab === "settings" && user && (
         <div className="flex-1 py-4">
           <SettingsView />
         </div>
@@ -235,7 +319,7 @@ export default function ReconcileApp() {
       <AuthModal
         isOpen={isAuthOpen}
         onClose={() => setIsAuthOpen(false)}
-        onSuccess={(loggedUser) => setUser(loggedUser)}
+        onSuccess={handleAuthSuccess}
       />
     </div>
   );

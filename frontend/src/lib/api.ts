@@ -70,3 +70,39 @@ export async function reconcileSingleInvoice(payload: {
   if (!res.ok) throw new Error("Failed to reconcile invoice");
   return res.json();
 }
+
+export async function apiGoogleAuth(payload: { email: string; name: string; avatar_url?: string; company?: string; google_id?: string }) {
+  const res = await fetch(`${API_BASE}/api/auth/google`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error("Backend Google auth failed");
+  return res.json();
+}
+
+export async function apiSignUp(payload: { email: string; password: string; name: string; organization?: string; role?: string }) {
+  const res = await fetch(`${API_BASE}/api/auth/signup`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error("Backend sign up failed");
+  return res.json();
+}
+
+export async function apiLogin(payload: { email: string; password: string }) {
+  const res = await fetch(`${API_BASE}/api/auth/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error("Backend login failed");
+  return res.json();
+}
+
+export async function apiGetUsers() {
+  const res = await fetch(`${API_BASE}/api/auth/users`, { cache: "no-store" });
+  if (!res.ok) throw new Error("Failed to fetch users");
+  return res.json();
+}

@@ -19,7 +19,10 @@ from app.config import (
 from app.database import (
     init_db,
     get_db_connection,
-    save_invoice_and_telemetry
+    save_invoice_and_telemetry,
+    save_or_update_user_profile,
+    get_user_by_email_or_id,
+    list_all_users
 )
 from app.telemetry import (
     init_morse,
@@ -97,6 +100,24 @@ class SingleReconcileRequest(BaseModel):
 class OutcomeConfirmRequest(BaseModel):
     verdict: str  # "confirmed" or "rejected"
     notes: Optional[str] = ""
+
+class GoogleAuthRequest(BaseModel):
+    email: str
+    name: str
+    avatar_url: Optional[str] = None
+    company: Optional[str] = "Enterprise Treasury"
+    google_id: Optional[str] = None
+
+class SignUpRequest(BaseModel):
+    email: str
+    password: str
+    name: str
+    organization: Optional[str] = "Enterprise Treasury"
+    role: Optional[str] = "Financial Controller"
+
+class LoginRequest(BaseModel):
+    email: str
+    password: str
 
 # -------------------------------------------------------------------------
 # API Endpoints
@@ -338,3 +359,49 @@ def get_bank_ledger():
     rows = cursor.fetchall()
     conn.close()
     return [dict(r) for r in rows]
+
+# -------------------------------------------------------------------------
+# User Authentication & Profiles (Synced to Supabase)
+# -------------------------------------------------------------------------
+@app.post("/api/auth/google")
+def auth_google(req: GoogleAuthRequest):
+    user = save_or_update_user_profile(
+        email=req.email,
+        full_name=req.name,
+        avatar_url=req.avatar_url,
+        organization_name=req.company or "Enterprise Treasury",
+        role="Financial Controller",
+        auth_provider="google"
+    )
+    return {"status": "success", "user": user, "token": f"bearer_{user['id']}"}
+
+@app.post("/api/auth/signup")
+def auth_signup(req: SignUpRequest):
+    user = save_or_update_user_profile(
+        email=req.email,
+        full_name=req.name,
+        avatar_url=f"https://api.dicebear.com/7.x/initials/svg?seed={req.name}",
+        organization_name=req.organization or "Enterprise Treasury",
+        role=req.role or "Financial Controller",
+        auth_provider="email"
+    )
+    return {"status": "success", "user": user, "token": f"bearer_{user['id']}"}
+
+@app.post("/api/auth/login")
+def auth_login(req: LoginRequest):
+    existing = get_user_by_email_or_id(req.email)
+    if not existing:
+        name = req.email.split("@")[0].replace(".", " ").title()
+        existing = save_or_update_user_profile(
+            email=req.email,
+            full_name=name,
+            organization_name="Enterprise Treasury",
+            role="Financial Controller",
+            auth_provider="email"
+        )
+    return {"status": "success", "user": existing, "token": f"bearer_{existing['id']}"}
+
+@app.get("/api/auth/users")
+def get_users():
+    return {"users": list_all_users()}
+
