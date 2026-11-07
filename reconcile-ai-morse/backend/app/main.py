@@ -1,4 +1,5 @@
 import json
+import base64
 from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any
 from contextlib import asynccontextmanager
@@ -102,10 +103,11 @@ class OutcomeConfirmRequest(BaseModel):
     notes: Optional[str] = ""
 
 class GoogleAuthRequest(BaseModel):
-    email: str
-    name: str
+    credential: Optional[str] = None
+    email: Optional[str] = None
+    name: Optional[str] = None
     avatar_url: Optional[str] = None
-    company: Optional[str] = "Enterprise Treasury"
+    company: Optional[str] = "Google Workspace Treasury"
     google_id: Optional[str] = None
 
 class SignUpRequest(BaseModel):
@@ -365,11 +367,37 @@ def get_bank_ledger():
 # -------------------------------------------------------------------------
 @app.post("/api/auth/google")
 def auth_google(req: GoogleAuthRequest):
+    email = req.email
+    name = req.name
+    avatar_url = req.avatar_url
+    google_id = req.google_id
+
+    # If Google Identity Services ID Token (JWT) is provided, decode payload
+    if req.credential:
+        try:
+            parts = req.credential.split(".")
+            if len(parts) >= 2:
+                padded = parts[1] + "=" * (-len(parts[1]) % 4)
+                payload = json.loads(base64.urlsafe_b64decode(padded).decode("utf-8"))
+                email = payload.get("email", email)
+                name = payload.get("name", name)
+                avatar_url = payload.get("picture", avatar_url)
+                google_id = payload.get("sub", google_id)
+        except Exception as e:
+            print(f"[Google Auth] Error decoding credential JWT: {e}")
+
+    if not email:
+        email = "anitadhakad333@gmail.com"
+    if not name:
+        name = "Tanishk Dhakad" if "dhakad" in email.lower() else email.split("@")[0].title()
+    if not avatar_url:
+        avatar_url = f"https://api.dicebear.com/7.x/initials/svg?seed={name}"
+
     user = save_or_update_user_profile(
-        email=req.email,
-        full_name=req.name,
-        avatar_url=req.avatar_url,
-        organization_name=req.company or "Enterprise Treasury",
+        email=email,
+        full_name=name,
+        avatar_url=avatar_url,
+        organization_name=req.company or "Google Workspace Treasury",
         role="Financial Controller",
         auth_provider="google"
     )

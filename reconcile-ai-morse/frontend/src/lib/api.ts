@@ -71,7 +71,7 @@ export async function reconcileSingleInvoice(payload: {
   return res.json();
 }
 
-export async function apiGoogleAuth(payload: { email: string; name: string; avatar_url?: string; company?: string; google_id?: string }) {
+export async function apiGoogleAuth(payload: { credential?: string; email?: string; name?: string; avatar_url?: string; company?: string; google_id?: string }) {
   const res = await fetch(`${API_BASE}/api/auth/google`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },

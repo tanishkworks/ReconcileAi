@@ -219,6 +219,7 @@ def save_or_update_user_profile(
                 "avatar_url": avatar,
                 "organization_name": organization_name,
                 "role": role,
+                "auth_provider": auth_provider,
                 "updated_at": now_iso
             }]
             requests.post(url, headers=get_supabase_headers(), json=payload, timeout=4)
