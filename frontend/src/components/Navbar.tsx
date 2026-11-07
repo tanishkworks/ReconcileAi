@@ -39,6 +39,7 @@ export function Navbar({
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
 
   const navItems = [
+    { id: "home", label: "Overview", icon: Sparkles },
     { id: "ledger", label: "Ledger Workbench", icon: Layers },
     { id: "uploader", label: "Document Ingestion", icon: Upload },
     { id: "bank_feeds", label: "Bank Accounts", icon: Building2 },
@@ -51,7 +52,7 @@ export function Navbar({
       <div className="flex items-center justify-between">
         {/* Brand Logo & Tagline */}
         <div className="flex items-center gap-6">
-          <div className="flex items-center gap-2.5 cursor-pointer" onClick={() => onTabChange("ledger")}>
+          <div className="flex items-center gap-2.5 cursor-pointer" onClick={() => onTabChange("home")}>
             <div className="w-8 h-8 rounded bg-[#141413] flex items-center justify-center text-white font-serif font-bold text-lg shadow-xs">
               R
             </div>
@@ -126,6 +127,9 @@ export function Navbar({
                 <img
                   src={user.avatar_url || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=60&h=60&fit=crop"}
                   alt={user.name}
+                  width={28}
+                  height={28}
+                  style={{ width: "28px", height: "28px", minWidth: "28px", minHeight: "28px", borderRadius: "9999px" }}
                   className="w-7 h-7 rounded-full object-cover border border-[#D4D1C5]"
                 />
                 <ChevronDown className="w-3 h-3 text-[#615F59]" />

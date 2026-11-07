@@ -11,6 +11,7 @@ import { BankFeeds } from "@/components/BankFeeds";
 import { AnalyticsView } from "@/components/AnalyticsView";
 import { SettingsView } from "@/components/SettingsView";
 import { AuthModal } from "@/components/AuthModal";
+import { LandingHero } from "@/components/LandingHero";
 import {
   fetchStats,
   fetchInvoices,
@@ -23,7 +24,7 @@ import { getCurrentUser, signOutUser, isSupabaseConfigured } from "@/lib/supabas
 import { Invoice, TelemetryTrace, UnitEconomicsStats } from "@/lib/types";
 
 export default function ReconcileApp() {
-  const [activeTab, setActiveTab] = useState<string>("ledger");
+  const [activeTab, setActiveTab] = useState<string>("home");
   const [stats, setStats] = useState<UnitEconomicsStats | null>(null);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
@@ -135,19 +136,28 @@ export default function ReconcileApp() {
 
   return (
     <div className="flex flex-col min-h-screen bg-[#F7F6F2]">
-      {/* Top Commercial Navbar */}
-      <Navbar
-        activeTab={activeTab}
-        onTabChange={setActiveTab}
-        onOpenUpload={() => setIsIngestOpen(true)}
-        onOpenAuth={() => setIsAuthOpen(true)}
-        user={user}
-        onSignOut={handleSignOut}
-        morseActive={stats?.morse_sdk_status.active || false}
-        supabaseConnected={isSupabaseConfigured()}
-      />
+      {/* Top Commercial Navbar (Displayed on all workspace views) */}
+      {activeTab !== "home" && (
+        <Navbar
+          activeTab={activeTab}
+          onTabChange={setActiveTab}
+          onOpenUpload={() => setIsIngestOpen(true)}
+          onOpenAuth={() => setIsAuthOpen(true)}
+          user={user}
+          onSignOut={handleSignOut}
+          morseActive={stats?.morse_sdk_status.active || false}
+          supabaseConnected={isSupabaseConfigured()}
+        />
+      )}
 
       {/* View Router */}
+      {activeTab === "home" && (
+        <LandingHero
+          onLaunchApp={() => setActiveTab("ledger")}
+          onOpenAuth={() => setIsAuthOpen(true)}
+        />
+      )}
+
       {activeTab === "ledger" && (
         <div className="flex flex-col flex-1">
           {/* Top Ledger Header & Unit Economics Strip */}
