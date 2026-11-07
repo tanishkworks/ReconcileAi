@@ -1,0 +1,42 @@
+# Dependencies
+node_modules/
+backend/venv/
+venv/
+.venv/
+reconcile-ai-morse/backend/venv/
+reconcile-ai-morse/frontend/node_modules/
+
+# Next.js
+.next/
+out/
+build/
+dist/
+reconcile-ai-morse/frontend/.next/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.pytest_cache/
+
+# Databases & local state
+*.db-journal
+reconcile_ledger.db
+reconcile-ai-morse/backend/reconcile_ledger.db
+
+# Design guardrails (cloned repos)
+.design-guardrails/
+reconcile-ai-morse/.design-guardrails/
+
+# Environment files
+.env
+.env.local
+.env.*.local
+*.pem
+
+# IDE / OS
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
