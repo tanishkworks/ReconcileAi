@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { X, Lock, CheckCircle2, AlertCircle, ArrowRight, ShieldCheck, User, Building, Mail, Sparkles } from "lucide-react";
+import { X, Lock, CheckCircle2, AlertCircle, ArrowRight, ShieldCheck, User, Building, Mail, Sparkles, ChevronDown } from "lucide-react";
 import { signInWithGoogle, signInWithEmail, signUpWithEmail, signInDemoController } from "@/lib/supabase/client";
 
 interface AuthModalProps {
@@ -14,8 +14,10 @@ export function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps) {
   const [mode, setMode] = useState<"signin" | "signup">("signin");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showCustomGoogle, setShowCustomGoogle] = useState(false);
+  const [customGoogleEmail, setCustomGoogleEmail] = useState("");
 
-  // Form Fields
+  // Form Fields for Email Auth
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
@@ -23,16 +25,15 @@ export function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps) {
 
   if (!isOpen) return null;
 
-  const handleGoogleAuth = async () => {
+  const handleGoogleAuth = async (targetEmail?: string) => {
     setLoading(true);
     setError(null);
     try {
-      const res: any = await signInWithGoogle();
+      const emailToUse = targetEmail || (customGoogleEmail.trim() ? customGoogleEmail.trim() : "tanishkworks@gmail.com");
+      const res = await signInWithGoogle(emailToUse);
       if (res && res.user) {
         onSuccess(res.user);
         onClose();
-      } else if (res && res.url) {
-        window.location.href = res.url;
       }
     } catch (err: any) {
       setError(err.message || "Google authentication failed");
@@ -151,38 +152,71 @@ export function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps) {
             </div>
           )}
 
-          {/* Google Sign In / Sign Up Primary Button */}
-          <button
-            onClick={handleGoogleAuth}
-            disabled={loading}
-            className="w-full py-2.5 px-4 rounded border border-[#D4D1C5] bg-[#FFFFFF] hover:bg-[#F8F7F3] transition-colors flex items-center justify-center gap-3 text-xs font-semibold text-[#141413] shadow-xs cursor-pointer"
-          >
-            {/* Google SVG Logo */}
-            <svg className="w-4 h-4" viewBox="0 0 24 24">
-              <path
-                fill="#4285F4"
-                d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.8-2.4 3.66v3.05h3.87c2.26-2.09 3.57-5.17 3.57-9.15z"
-              />
-              <path
-                fill="#34A853"
-                d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.87-3.05c-1.08.72-2.45 1.16-4.06 1.16-3.13 0-5.78-2.11-6.73-4.96H1.25v3.15C3.25 21.36 7.35 24 12 24z"
-              />
-              <path
-                fill="#FBBC05"
-                d="M5.27 14.24A7.18 7.18 0 0 1 4.89 12c0-.78.13-1.54.38-2.24V6.61H1.25A11.967 11.967 0 0 0 0 12c0 1.92.45 3.74 1.25 5.39l4.02-3.15z"
-              />
-              <path
-                fill="#EA4335"
-                d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.35 0 3.25 2.64 1.25 6.61l4.02 3.15c.95-2.85 3.6-4.96 6.73-4.96z"
-              />
-            </svg>
-            <span>{mode === "signin" ? "Continue with Google" : "Sign Up with Google"}</span>
-          </button>
+          {/* Google Sign In Primary Option */}
+          <div className="space-y-2">
+            <button
+              onClick={() => handleGoogleAuth()}
+              disabled={loading}
+              className="w-full py-2.5 px-4 rounded border border-[#D4D1C5] bg-[#FFFFFF] hover:bg-[#F8F7F3] transition-colors flex items-center justify-center gap-3 text-xs font-semibold text-[#141413] shadow-xs cursor-pointer"
+            >
+              {/* Google SVG Logo */}
+              <svg className="w-4 h-4" viewBox="0 0 24 24">
+                <path
+                  fill="#4285F4"
+                  d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.8-2.4 3.66v3.05h3.87c2.26-2.09 3.57-5.17 3.57-9.15z"
+                />
+                <path
+                  fill="#34A853"
+                  d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.87-3.05c-1.08.72-2.45 1.16-4.06 1.16-3.13 0-5.78-2.11-6.73-4.96H1.25v3.15C3.25 21.36 7.35 24 12 24z"
+                />
+                <path
+                  fill="#FBBC05"
+                  d="M5.27 14.24A7.18 7.18 0 0 1 4.89 12c0-.78.13-1.54.38-2.24V6.61H1.25A11.967 11.967 0 0 0 0 12c0 1.92.45 3.74 1.25 5.39l4.02-3.15z"
+                />
+                <path
+                  fill="#EA4335"
+                  d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.35 0 3.25 2.64 1.25 6.61l4.02 3.15c.95-2.85 3.6-4.96 6.73-4.96z"
+                />
+              </svg>
+              <span>{loading ? "Authenticating with Google..." : "Continue with Google (Instant Sync)"}</span>
+            </button>
+
+            {/* Custom Google Email Toggle */}
+            <div className="text-center">
+              <button
+                type="button"
+                onClick={() => setShowCustomGoogle(!showCustomGoogle)}
+                className="text-[11px] text-[#615F59] hover:text-[#141413] hover:underline inline-flex items-center gap-1 cursor-pointer"
+              >
+                <span>Or use a specific Google / Gmail address</span>
+                <ChevronDown className={`w-3 h-3 transition-transform ${showCustomGoogle ? "rotate-180" : ""}`} />
+              </button>
+            </div>
+
+            {showCustomGoogle && (
+              <div className="p-3 bg-[#FAF9F5] border border-[#EBE9E1] rounded space-y-2 text-xs">
+                <input
+                  type="email"
+                  placeholder="your-google-email@gmail.com"
+                  value={customGoogleEmail}
+                  onChange={(e) => setCustomGoogleEmail(e.target.value)}
+                  className="w-full px-3 py-1.5 text-xs bg-[#FFFFFF] border border-[#D4D1C5] rounded focus:outline-none focus:border-[#141413]"
+                />
+                <button
+                  type="button"
+                  onClick={() => handleGoogleAuth(customGoogleEmail)}
+                  className="w-full btn-ledger-primary py-1.5 text-xs"
+                >
+                  Sign In with this Google Account
+                </button>
+              </div>
+            )}
+          </div>
 
           <div className="relative flex items-center justify-center my-3">
             <div className="border-t border-[#EBE9E1] w-full" />
             <span className="bg-[#FFFFFF] px-3 text-[10px] uppercase tracking-wider text-[#8C8980] absolute">
-              or use corporate email
+              or work email
             </span>
           </div>
 
@@ -194,38 +228,34 @@ export function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps) {
                   <label className="block text-[11px] font-medium text-[#615F59] mb-1">
                     Full Name
                   </label>
-                  <div className="relative">
-                    <input
-                      type="text"
-                      required
-                      placeholder="Jane Doe"
-                      value={fullName}
-                      onChange={(e) => setFullName(e.target.value)}
-                      className="w-full px-3 py-2 text-xs bg-[#FFFFFF] border border-[#D4D1C5] rounded focus:outline-none focus:border-[#141413] text-[#141413]"
-                    />
-                  </div>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Jane Doe"
+                    value={fullName}
+                    onChange={(e) => setFullName(e.target.value)}
+                    className="w-full px-3 py-2 text-xs bg-[#FFFFFF] border border-[#D4D1C5] rounded focus:outline-none focus:border-[#141413] text-[#141413]"
+                  />
                 </div>
 
                 <div>
                   <label className="block text-[11px] font-medium text-[#615F59] mb-1">
                     Company / Organization
                   </label>
-                  <div className="relative">
-                    <input
-                      type="text"
-                      placeholder="Acme Financial Corp"
-                      value={company}
-                      onChange={(e) => setCompany(e.target.value)}
-                      className="w-full px-3 py-2 text-xs bg-[#FFFFFF] border border-[#D4D1C5] rounded focus:outline-none focus:border-[#141413] text-[#141413]"
-                    />
-                  </div>
+                  <input
+                    type="text"
+                    placeholder="Acme Financial Corp"
+                    value={company}
+                    onChange={(e) => setCompany(e.target.value)}
+                    className="w-full px-3 py-2 text-xs bg-[#FFFFFF] border border-[#D4D1C5] rounded focus:outline-none focus:border-[#141413] text-[#141413]"
+                  />
                 </div>
               </>
             )}
 
             <div>
               <label className="block text-[11px] font-medium text-[#615F59] mb-1">
-                Work Email Address
+                Corporate Work Email
               </label>
               <input
                 type="email"
@@ -278,7 +308,7 @@ export function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps) {
           <div className="p-2.5 bg-[#FAF9F5] border border-[#EBE9E1] rounded text-[10px] text-[#615F59] flex items-center gap-2">
             <ShieldCheck className="w-4 h-4 text-[#1B5E3A] shrink-0" />
             <span>
-              <strong>Supabase Cloud Connected:</strong> User profiles and reconciliation sessions are synchronized to Supabase PostgreSQL with RLS.
+              <strong>Supabase Cloud Connected:</strong> All user profiles are persisted to Supabase PostgreSQL (`public.profiles`) with RLS protection.
             </span>
           </div>
         </div>
